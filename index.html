@@ -28,6 +28,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Tone.js for Web Audio synthesis -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- PeerJS for Free WebRTC P2P Networking -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <style>
         body {
             background-color: #05070c;
@@ -39,10 +41,7 @@
             background-size: 550px 550px, 350px 350px, 250px 250px;
             background-position: 0 0, 40px 60px, 130px 270px;
         }
-        .glow-alliance { box-shadow: 0 0 15px rgba(0, 243, 255, 0.4); }
-        .glow-empire { box-shadow: 0 0 15px rgba(255, 0, 85, 0.4); }
         .grid-cell { transition: all 0.2s ease; }
-        /* Custom scrollbar */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #0a0d14; }
         ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
@@ -124,7 +123,7 @@
                             </div>
                             <div>
                                 <label class="block text-xs text-slate-400 mb-1">房間代碼 (4位數)</label>
-                                <input type="text" id="join-room-code" placeholder="例如：STAR-8821" uppercase class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-cyan-300 focus:outline-none focus:border-cyan-500 uppercase tracking-widest font-mono">
+                                <input type="text" id="join-room-code" placeholder="例如：STAR-8821" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-cyan-300 focus:outline-none focus:border-cyan-500 uppercase tracking-widest font-mono">
                             </div>
                         </div>
                     </div>
@@ -150,9 +149,9 @@
                     <i class="fa-solid fa-satellite-dish text-9xl"></i>
                 </div>
                 
-                <span class="inline-block px-3 py-1 bg-cyan-950 text-cyan-400 text-xs rounded-full border border-cyan-800/50 mb-4">雲端對戰等待室</span>
+                <span class="inline-block px-3 py-1 bg-cyan-950 text-cyan-400 text-xs rounded-full border border-cyan-800/50 mb-4">即時點對點 (P2P) 連線大廳</span>
                 <h2 class="text-2xl font-bold text-white mb-2">等待玩家加入...</h2>
-                <p class="text-sm text-slate-400 mb-6">請將下方房間代碼分享給另一位玩家以開始遊戲</p>
+                <p class="text-sm text-slate-400 mb-6">請將下方房間代碼分享給學生以進行即時對戰</p>
 
                 <div class="bg-slate-950 border border-dashed border-cyan-500/50 p-4 rounded-xl inline-block mb-6">
                     <span class="text-xs text-slate-500 block mb-1">ROOM CODE</span>
@@ -170,9 +169,9 @@
                     </div>
                 </div>
 
-                <div class="mt-8">
+                <div class="mt-8 flex flex-col items-center">
                     <i class="fa-solid fa-spinner animate-spin text-2xl text-cyan-500 mb-2"></i>
-                    <p class="text-xs text-slate-500">正在監聽雲端訊號中...</p>
+                    <p id="p2p-status-indicator" class="text-xs text-slate-400 font-mono">Peer 伺服器初始化中...</p>
                 </div>
             </div>
         </div>
@@ -190,7 +189,7 @@
                             <h3 id="my-role-name" class="font-bold text-cyan-400">反抗軍同盟</h3>
                             <span id="game-phase-tag" class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">佈署階段</span>
                         </div>
-                        <p class="text-xs text-slate-400" id="turn-indicator-text">請在下方手動輸入座標佈置您的戰艦</p>
+                        <p class="text-xs text-slate-400" id="turn-indicator-text">請在右側手動輸入座標佈置您的戰艦</p>
                     </div>
                 </div>
 
@@ -347,7 +346,6 @@
                 </div>
 
                 <div class="flex items-center space-x-3">
-                    <!-- Quadrant Switcher for Teacher -->
                     <div class="flex items-center space-x-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
                         <button onclick="setQuadrantMode('Q1')" id="teacher-btn-q1" class="px-3 py-1 rounded-lg text-xs font-bold bg-amber-600 text-slate-950">
                             第一象限 (0~10)
@@ -408,92 +406,8 @@
         <p>星際大戰座標平面戰役 &copy; 數學座標系教學專用系統</p>
     </footer>
 
-    <!-- Firebase Standard Integration -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // Firebase Configuration setup
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'starwars-coord-battle';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' 
-            ? JSON.parse(__firebase_config) 
-            : { apiKey: "demo", authDomain: "demo.firebaseapp.com", projectId: "demo" };
-
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-
-        // Global State Window Attachments for App logic
-        window.firebaseDB = db;
-        window.appId = appId;
-        window.doc = doc;
-        window.setDoc = setDoc;
-        window.getDoc = getDoc;
-        window.updateDoc = updateDoc;
-        window.onSnapshot = onSnapshot;
-
-        // Initialize Authentication
-        async function initAuth() {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-                console.log("Firebase Auth Success, UID:", auth.currentUser?.uid);
-            } catch (err) {
-                console.warn("Auth Fallback:", err);
-            }
-        }
-        initAuth();
-    </script>
-
-    <!-- Core Game Logic Script -->
+    <!-- Core Game Logic & P2P PeerJS Script -->
     <script>
-        // Local Broadcast Channel fallback for multi-tab synchronization
-        const localSyncChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('starwars_room_sync') : null;
-        if (localSyncChannel) {
-            localSyncChannel.onmessage = (event) => {
-                if (event.data && event.data.code === currentRoomCode) {
-                    gameState = event.data.state;
-                    currentQuadrantMode = gameState.quadrantMode || 'Q1';
-                    syncUIState();
-                }
-            };
-        }
-
-        // Helper functions for local state persistence
-        function saveGameStateLocalFallback(code, data) {
-            localStorage.setItem(`room_${code}`, JSON.stringify(data));
-            if (localSyncChannel) {
-                localSyncChannel.postMessage({ code: code, state: data });
-            }
-        }
-
-        function fetchGameStateLocalFallback(code) {
-            const raw = localStorage.getItem(`room_${code}`);
-            return raw ? JSON.parse(raw) : null;
-        }
-
-        function updateGameStateLocalFallback(code, payload) {
-            let current = fetchGameStateLocalFallback(code) || {};
-            
-            // Apply payload updates
-            Object.keys(payload).forEach(key => {
-                if (key.includes('.')) {
-                    const [parent, child] = key.split('.');
-                    if (!current[parent]) current[parent] = {};
-                    current[parent][child] = payload[key];
-                } else {
-                    current[key] = payload[key];
-                }
-            });
-
-            saveGameStateLocalFallback(code, current);
-            return current;
-        }
-
         // Sound Synthesis with Tone.js
         const AudioEngine = {
             playLaser() {
@@ -519,13 +433,29 @@
             }
         };
 
-        // Core App Data Structures
+        // Core App State
         let currentRoomCode = null;
         let currentUserRole = null; // 'P1', 'P2', 'SPECTATOR'
-        let currentQuadrantMode = 'Q1'; // 'Q1' (0~10) or 'ALL' (-5~+5)
+        let currentQuadrantMode = 'Q1';
         let isPracticeMode = false;
 
-        // Ship Fleet Requirements (Total 10 grids)
+        // PeerJS Networking handle
+        let peer = null;
+        let peerConnections = [];
+        let hostConnection = null;
+
+        // Local BroadcastChannel fallback for same-browser testing
+        const broadcastChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('starwars_room_sync') : null;
+        if (broadcastChannel) {
+            broadcastChannel.onmessage = (event) => {
+                if (event.data && event.data.code === currentRoomCode) {
+                    gameState = event.data.state;
+                    currentQuadrantMode = gameState.quadrantMode || 'Q1';
+                    syncUIState();
+                }
+            };
+        }
+
         const FLEET_SPECS = [
             { type: 'destroyer', name: '殲星艦', size: 4 },
             { type: 'cruiser', name: '星際巡洋艦', size: 3 },
@@ -533,16 +463,14 @@
             { type: 'fighter', name: 'X-翼戰機', size: 1 },
         ];
 
-        // Local state replica
         let gameState = {
             status: 'WAITING', // WAITING, DEPLOYING, BATTLE, ENDED
             turn: 'P1',
-            p1: { name: 'Player 1', ships: [], attacks: [], ready: false },
-            p2: { name: 'Player 2', ships: [], attacks: [], ready: false },
+            quadrantMode: 'Q1',
+            p1: { name: 'Player 1', ships: [], attacks: [], ready: false, joined: false },
+            p2: { name: 'Player 2', ships: [], attacks: [], ready: false, joined: false },
             logs: []
         };
-
-        let unsubscribeRoom = null;
 
         function showToast(msg, type = 'info') {
             const container = document.getElementById('toast-container');
@@ -554,20 +482,31 @@
             setTimeout(() => toast.remove(), 3000);
         }
 
-        // Generate 4-digit Room Code
         function generateRoomCode() {
             const num = Math.floor(1000 + Math.random() * 9000);
             return `STAR-${num}`;
         }
 
-        // Teacher Creates Room
-        async function createRoomAsTeacher() {
+        // Broadcast current state to all connected peers
+        function broadcastState() {
+            if (broadcastChannel) {
+                broadcastChannel.postMessage({ code: currentRoomCode, state: gameState });
+            }
+            if (peerConnections.length > 0) {
+                peerConnections.forEach(conn => {
+                    if (conn.open) conn.send({ type: 'STATE_UPDATE', state: gameState });
+                });
+            }
+        }
+
+        // Teacher Creates Room as P2P Host
+        function createRoomAsTeacher() {
             const code = generateRoomCode();
             currentRoomCode = code;
             currentUserRole = 'SPECTATOR';
             isPracticeMode = false;
 
-            const initialData = {
+            gameState = {
                 status: 'WAITING',
                 turn: 'P1',
                 quadrantMode: 'Q1',
@@ -576,15 +515,16 @@
                 logs: ['教師已建立房間，等待玩家加入...']
             };
 
-            await saveGameStateToCloud(code, initialData);
-            setupRoomListener(code);
             updateRoleBadge('教師觀戰者');
-            switchView('view-teacher-dashboard');
-            showToast(`房間 ${code} 已順利創建！`, 'success');
+            switchView('view-waiting');
+            document.getElementById('waiting-room-code-display').innerText = code;
+
+            initPeerHost(code);
+            showToast(`房間 ${code} 創建成功！`, 'success');
         }
 
         // Student Joins Room
-        async function joinRoomAsStudent() {
+        function joinRoomAsStudent() {
             const codeInput = document.getElementById('join-room-code').value.trim().toUpperCase();
             const nickname = document.getElementById('player-nickname').value.trim() || '飛行員';
 
@@ -596,41 +536,109 @@
             currentRoomCode = codeInput;
             isPracticeMode = false;
 
-            // Fetch room state
-            const snapshotData = await fetchGameStateFromCloud(codeInput);
-            if (!snapshotData) {
-                showToast('找不到該房間代碼，請確認後重試！', 'error');
-                return;
-            }
+            switchView('view-waiting');
+            document.getElementById('waiting-room-code-display').innerText = codeInput;
+            document.getElementById('p2p-status-indicator').innerText = '正在尋找專屬房間通道...';
 
-            let roleAssigned = 'SPECTATOR';
-            let updatePayload = {};
+            initPeerClient(codeInput, nickname);
+        }
 
-            if (!snapshotData.p1?.joined) {
-                roleAssigned = 'P1';
-                updatePayload['p1.joined'] = true;
-                updatePayload['p1.name'] = `${nickname} (P1)`;
-            } else if (!snapshotData.p2?.joined) {
-                roleAssigned = 'P2';
-                updatePayload['p2.joined'] = true;
-                updatePayload['p2.name'] = `${nickname} (P2)`;
-            } else {
-                roleAssigned = 'SPECTATOR';
-                showToast('房間兩位玩家已滿，自動轉為觀戰視角', 'info');
-            }
+        // Host PeerJS Setup
+        function initPeerHost(code) {
+            const sanitizedCode = code.replace(/[^A-Z0-9]/g, '');
+            const peerId = `sw-coord-${sanitizedCode}`;
 
-            currentUserRole = roleAssigned;
-            updateRoleBadge(roleAssigned === 'P1' ? 'P1 (反抗軍)' : roleAssigned === 'P2' ? 'P2 (帝國)' : '觀戰者');
+            if (peer) peer.destroy();
+            peer = new Peer(peerId);
 
-            if (Object.keys(updatePayload).length > 0) {
-                updatePayload.logs = [...(snapshotData.logs || []), `${nickname} 以 ${roleAssigned} 身份加入`];
-                if (snapshotData.p1?.joined || roleAssigned === 'P2') {
-                    updatePayload.status = 'DEPLOYING';
+            peer.on('open', (id) => {
+                document.getElementById('p2p-status-indicator').innerText = '🟢 P2P 房主通道已成功就緒！';
+            });
+
+            peer.on('connection', (conn) => {
+                peerConnections.push(conn);
+
+                conn.on('data', (data) => {
+                    handleHostIncomingData(conn, data);
+                });
+
+                conn.on('close', () => {
+                    peerConnections = peerConnections.filter(c => c !== conn);
+                });
+            });
+
+            peer.on('error', (err) => {
+                console.warn("Peer error:", err);
+                document.getElementById('p2p-status-indicator').innerText = '💡 已開啟本地即時廣播通道';
+            });
+        }
+
+        function handleHostIncomingData(conn, data) {
+            if (data.type === 'JOIN_REQUEST') {
+                let assignedRole = 'SPECTATOR';
+                if (!gameState.p1.joined) {
+                    assignedRole = 'P1';
+                    gameState.p1.joined = true;
+                    gameState.p1.name = `${data.nickname} (P1)`;
+                } else if (!gameState.p2.joined) {
+                    assignedRole = 'P2';
+                    gameState.p2.joined = true;
+                    gameState.p2.name = `${data.nickname} (P2)`;
                 }
-                await updateGameStateToCloud(codeInput, updatePayload);
-            }
 
-            setupRoomListener(codeInput);
+                if (gameState.p1.joined && gameState.p2.joined && gameState.status === 'WAITING') {
+                    gameState.status = 'DEPLOYING';
+                }
+
+                gameState.logs.push(`${data.nickname} 以 ${assignedRole} 身份連線進入房間`);
+                
+                conn.send({ type: 'JOIN_RESPONSE', role: assignedRole, state: gameState });
+                broadcastState();
+                syncUIState();
+            } else if (data.type === 'ACTION_UPDATE') {
+                gameState = data.state;
+                broadcastState();
+                syncUIState();
+            }
+        }
+
+        // Client PeerJS Setup
+        function initPeerClient(code, nickname) {
+            const sanitizedCode = code.replace(/[^A-Z0-9]/g, '');
+            const targetPeerId = `sw-coord-${sanitizedCode}`;
+
+            if (peer) peer.destroy();
+            peer = new Peer();
+
+            peer.on('open', () => {
+                hostConnection = peer.connect(targetPeerId);
+
+                hostConnection.on('open', () => {
+                    document.getElementById('p2p-status-indicator').innerText = '🟢 已連線至房主，正在驗證身份...';
+                    hostConnection.send({ type: 'JOIN_REQUEST', nickname: nickname });
+                });
+
+                hostConnection.on('data', (data) => {
+                    if (data.type === 'JOIN_RESPONSE') {
+                        currentUserRole = data.role;
+                        gameState = data.state;
+                        updateRoleBadge(data.role === 'P1' ? 'P1 (反抗軍)' : data.role === 'P2' ? 'P2 (帝國)' : '觀戰者');
+                        syncUIState();
+                        showToast(`成功進入房間！您的身份為 ${currentUserRole}`, 'success');
+                    } else if (data.type === 'STATE_UPDATE') {
+                        gameState = data.state;
+                        syncUIState();
+                    }
+                });
+
+                hostConnection.on('error', (err) => {
+                    showToast('無法連接到該房間代碼，請確認代碼是否正確！', 'error');
+                });
+            });
+
+            peer.on('error', (err) => {
+                showToast('伺服器連線失敗，請稍後重試或開啟單人練習', 'error');
+            });
         }
 
         // Single Player Practice Mode
@@ -648,9 +656,7 @@
                 logs: ['開啟單人練習模式！請完成佈署。']
             };
 
-            // Auto-deploy for AI (P2)
             autoDeployForAI();
-
             updateRoleBadge('單人練習模式');
             switchView('view-student-game');
             renderStudentView();
@@ -687,7 +693,6 @@
                     }
 
                     if (valid) {
-                        // Check overlap
                         const overlap = ships.some(s => s.coords.some(c1 => coords.some(c2 => c1.x === c2.x && c1.y === c2.y)));
                         if (!overlap) {
                             ships.push({ type: spec.type, size: spec.size, coords: coords });
@@ -697,81 +702,6 @@
                 }
             });
             return ships;
-        }
-
-        function setupRoomListener(code) {
-            if (isPracticeMode) return;
-
-            const db = window.firebaseDB;
-            if (unsubscribeRoom) {
-                unsubscribeRoom();
-                unsubscribeRoom = null;
-            }
-
-            try {
-                if (window.doc && db) {
-                    const docRef = window.doc(db, 'artifacts', window.appId, 'public', 'data', 'rooms', code);
-                    unsubscribeRoom = window.onSnapshot(docRef, (docSnap) => {
-                        if (docSnap.exists()) {
-                            gameState = docSnap.data();
-                            currentQuadrantMode = gameState.quadrantMode || 'Q1';
-                            syncUIState();
-                        }
-                    }, (err) => {
-                        console.warn("Firestore snapshot error, falling back to local sync:", err);
-                    });
-                }
-            } catch (err) {
-                console.warn("Firestore setupListener fallback:", err);
-            }
-
-            // Always attempt initial state sync
-            const localState = fetchGameStateLocalFallback(code);
-            if (localState) {
-                gameState = localState;
-                currentQuadrantMode = gameState.quadrantMode || 'Q1';
-                syncUIState();
-            }
-        }
-
-        async function saveGameStateToCloud(code, data) {
-            if (isPracticeMode) return;
-            saveGameStateLocalFallback(code, data);
-            try {
-                const db = window.firebaseDB;
-                if (!window.doc || !db) return;
-                const docRef = window.doc(db, 'artifacts', window.appId, 'public', 'data', 'rooms', code);
-                await window.setDoc(docRef, data);
-            } catch (err) {
-                console.warn("Cloud save notice:", err);
-            }
-        }
-
-        async function updateGameStateToCloud(code, payload) {
-            if (isPracticeMode) return;
-            const updated = updateGameStateLocalFallback(code, payload);
-            try {
-                const db = window.firebaseDB;
-                if (!window.doc || !db) return;
-                const docRef = window.doc(db, 'artifacts', window.appId, 'public', 'data', 'rooms', code);
-                await window.updateDoc(docRef, payload);
-            } catch (err) {
-                console.warn("Cloud update notice:", err);
-            }
-        }
-
-        async function fetchGameStateFromCloud(code) {
-            try {
-                const db = window.firebaseDB;
-                if (window.doc && db) {
-                    const docRef = window.doc(db, 'artifacts', window.appId, 'public', 'data', 'rooms', code);
-                    const snap = await window.getDoc(docRef);
-                    if (snap.exists()) return snap.data();
-                }
-            } catch (err) {
-                console.warn("Cloud fetch notice:", err);
-            }
-            return fetchGameStateLocalFallback(code);
         }
 
         function syncUIState() {
@@ -812,7 +742,7 @@
         }
 
         function leaveRoom() {
-            if (unsubscribeRoom) unsubscribeRoom();
+            if (peer) peer.destroy();
             currentRoomCode = null;
             currentUserRole = null;
             switchView('view-lobby');
@@ -821,15 +751,20 @@
 
         function setQuadrantMode(mode) {
             currentQuadrantMode = mode;
-            if (!isPracticeMode && currentRoomCode) {
-                updateGameStateToCloud(currentRoomCode, { quadrantMode: mode });
+            gameState.quadrantMode = mode;
+            sendActionUpdate();
+            syncUIState();
+        }
+
+        function sendActionUpdate() {
+            if (hostConnection && hostConnection.open) {
+                hostConnection.send({ type: 'ACTION_UPDATE', state: gameState });
             } else {
-                gameState.quadrantMode = mode;
-                syncUIState();
+                broadcastState();
             }
         }
 
-        // Manual Ship Deployment Logic
+        // Manual Ship Deployment
         function deployShipManual() {
             const shipSize = parseInt(document.getElementById('deploy-ship-select').value);
             const x = parseInt(document.getElementById('deploy-x').value);
@@ -843,7 +778,6 @@
 
             const range = currentQuadrantMode === 'Q1' ? { min: 0, max: 10 } : { min: -5, max: 5 };
 
-            // Generate requested ship coordinates
             let coords = [];
             for (let i = 0; i < shipSize; i++) {
                 const cx = dir === 'H' ? x + i : x;
@@ -859,25 +793,21 @@
             const myData = currentUserRole === 'P1' ? gameState.p1 : gameState.p2;
             const existingShips = myData.ships || [];
 
-            // Check if ship type already deployed
             const spec = FLEET_SPECS.find(s => s.size === shipSize);
             if (existingShips.some(s => s.type === spec.type)) {
                 showToast(`您已經佈署過【${spec.name}】了！`, 'error');
                 return;
             }
 
-            // Check overlap
             const overlap = existingShips.some(s => s.coords.some(c1 => coords.some(c2 => c1.x === c2.x && c1.y === c2.y)));
             if (overlap) {
                 showToast('艦艇不可與既有艦艇重疊！', 'error');
                 return;
             }
 
-            // Add ship
             existingShips.push({ type: spec.type, size: shipSize, coords: coords });
             myData.ships = existingShips;
 
-            // Check if all 4 ships ready
             if (existingShips.length === 4) {
                 myData.ready = true;
                 showToast('恭喜！所有戰艦已完成佈署！', 'success');
@@ -885,50 +815,28 @@
                 showToast(`已成功佈署【${spec.name}】`, 'info');
             }
 
-            // Check if both P1 and P2 ready
-            let payload = {};
             const otherRoleKey = currentUserRole === 'P1' ? 'p2' : 'p1';
-            const myRoleKey = currentUserRole === 'P1' ? 'p1' : 'p2';
-
-            payload[`${myRoleKey}.ships`] = myData.ships;
-            payload[`${myRoleKey}.ready`] = myData.ready;
-
             if (myData.ready && gameState[otherRoleKey]?.ready) {
-                payload.status = 'BATTLE';
-                payload.logs = [...(gameState.logs || []), '雙方艦隊佈署完畢，星際對戰正式開始！'];
+                gameState.status = 'BATTLE';
+                gameState.logs.push('雙方艦隊佈署完畢，星際對戰正式開始！');
             }
 
-            if (!isPracticeMode) {
-                updateGameStateToCloud(currentRoomCode, payload);
-            } else {
-                if (myData.ready) gameState.status = 'BATTLE';
-                renderStudentView();
-            }
+            sendActionUpdate();
+            renderStudentView();
         }
 
-        // Auto Deploy Demo Helper
         function autoDeployDemo() {
             const myData = currentUserRole === 'P1' ? gameState.p1 : gameState.p2;
             myData.ships = generateRandomFleet(currentQuadrantMode);
             myData.ready = true;
 
-            let payload = {};
-            const myRoleKey = currentUserRole === 'P1' ? 'p1' : 'p2';
             const otherRoleKey = currentUserRole === 'P1' ? 'p2' : 'p1';
-
-            payload[`${myRoleKey}.ships`] = myData.ships;
-            payload[`${myRoleKey}.ready`] = true;
-
             if (gameState[otherRoleKey]?.ready) {
-                payload.status = 'BATTLE';
+                gameState.status = 'BATTLE';
             }
 
-            if (!isPracticeMode) {
-                updateGameStateToCloud(currentRoomCode, payload);
-            } else {
-                gameState.status = 'BATTLE';
-                renderStudentView();
-            }
+            sendActionUpdate();
+            renderStudentView();
             showToast('已為您一鍵自動佈置示範艦隊！', 'success');
         }
 
@@ -947,7 +855,7 @@
             const y = parseInt(document.getElementById('fire-y').value);
 
             if (isNaN(x) || isNaN(y)) {
-                showToast('請輸入完整的砲擊 target 座標！', 'error');
+                showToast('請輸入完整的砲擊座標！', 'error');
                 return;
             }
 
@@ -961,16 +869,13 @@
             const opponentData = gameState[opponentRoleKey];
             const myData = currentUserRole === 'P1' ? gameState.p1 : gameState.p2;
 
-            // Check if already fired at this coord
             if (myData.attacks.some(a => a.x === x && a.y === y)) {
                 showToast('您已經砲擊過此座標了！', 'error');
                 return;
             }
 
-            // Play sound
             AudioEngine.playLaser();
 
-            // Check hit
             let isHit = false;
             opponentData.ships.forEach(s => {
                 s.coords.forEach(c => {
@@ -980,46 +885,31 @@
 
             if (isHit) AudioEngine.playHit(); else AudioEngine.playMiss();
 
-            // Register attack
             myData.attacks.push({ x: x, y: y, hit: isHit });
 
-            // Quadrant and Relative Guidance Calculation
             const quadrantStr = calculateQuadrant(x, y);
             const relativeHint = calculateRelativeDirection(x, y, opponentData.ships);
 
             const logMsg = `${currentUserRole === 'P1' ? '反抗軍' : '銀河帝國'} 砲擊 (${x}, ${y}) -> ${isHit ? '💥 擊中戰艦！' : '🌊 未擊中'}`;
+            gameState.logs.push(logMsg);
 
-            // Check Win Condition
             const totalShipCells = 10;
             const totalHits = myData.attacks.filter(a => a.hit).length;
-            let isWin = totalHits >= totalShipCells;
-
-            let payload = {};
-            const myRoleKey = currentUserRole === 'P1' ? 'p1' : 'p2';
-            payload[`${myRoleKey}.attacks`] = myData.attacks;
-            payload.turn = currentUserRole === 'P1' ? 'P2' : 'P1';
-            payload.logs = [...(gameState.logs || []), logMsg];
-
-            if (isWin) {
-                payload.status = 'ENDED';
-                payload.logs.push(`🎉 戰役結束！${currentUserRole === 'P1' ? '反抗軍同盟' : '銀河帝國'} 獲得終極勝利！`);
-            }
-
-            if (!isPracticeMode) {
-                updateGameStateToCloud(currentRoomCode, payload);
+            
+            if (totalHits >= totalShipCells) {
+                gameState.status = 'ENDED';
+                gameState.logs.push(`🎉 戰役結束！${currentUserRole === 'P1' ? '反抗軍同盟' : '銀河帝國'} 獲得終極勝利！`);
             } else {
-                gameState[myRoleKey].attacks = myData.attacks;
-                gameState.turn = payload.turn;
-                gameState.logs.push(logMsg);
-
-                // AI Auto Attack back if practice mode
-                if (!isWin && gameState.turn === 'P2') {
-                    setTimeout(aiAttackTurn, 1000);
-                }
-                renderStudentView();
+                gameState.turn = currentUserRole === 'P1' ? 'P2' : 'P1';
             }
 
-            // Display UI Hint
+            sendActionUpdate();
+
+            if (isPracticeMode && gameState.turn === 'P2' && gameState.status === 'BATTLE') {
+                setTimeout(aiAttackTurn, 1000);
+            }
+
+            renderStudentView();
             showAttackHint(quadrantStr, relativeHint);
         }
 
@@ -1057,7 +947,6 @@
         }
 
         function calculateRelativeDirection(x, y, enemyShips) {
-            // Find nearest unhit ship cell
             let minDistance = 999;
             let targetCell = null;
 
@@ -1087,7 +976,6 @@
         }
 
         function renderStudentView() {
-            // Phase Toggle
             const isBattle = gameState.status === 'BATTLE' || gameState.status === 'ENDED';
             document.getElementById('panel-deploy-controls').classList.toggle('hidden', isBattle);
             document.getElementById('panel-fire-controls').classList.toggle('hidden', !isBattle);
@@ -1096,17 +984,14 @@
                 gameState.status === 'DEPLOYING' ? '佈署階段' : 
                 gameState.status === 'BATTLE' ? '戰鬥階段' : '遊戲結束';
 
-            // Role Banner Setup
             const isP1 = currentUserRole === 'P1';
             document.getElementById('my-role-name').innerText = isP1 ? '反抗軍同盟 (Alliance)' : '銀河帝國 (Imperial Fleet)';
             
-            // Turn text
             const isMyTurn = gameState.turn === currentUserRole;
             const turnText = !isBattle ? '請在右側輸入座標，佈置您的 4 艘戰艦' :
                 isMyTurn ? '⚔️ 輪到您的回合！請輸入攻擊座標並發射雷射' : '⏳ 等待對方思考並發射砲擊...';
             document.getElementById('turn-indicator-text').innerText = turnText;
 
-            // Render Deployed Ships List Progress
             const myData = isP1 ? gameState.p1 : gameState.p2;
             const listContainer = document.getElementById('deployed-ships-list');
             listContainer.innerHTML = '';
@@ -1119,27 +1004,19 @@
                 listContainer.appendChild(tag);
             });
 
-            // Render Board Title
             document.getElementById('board-title-text').innerHTML = !isBattle 
                 ? '<i class="fa-solid fa-radar mr-2"></i>我的星域艦隊分佈圖' 
                 : '<i class="fa-solid fa-crosshairs mr-2"></i>敵方雷達掃描對戰圖';
 
-            // Render Interactive Grid
             const container = document.getElementById('student-grid-container');
-            const enemyData = isP1 ? gameState.p2 : gameState.p1;
-            
-            // In Deployment, show own ships. In Battle, show own attacks on enemy grid!
-            const displayShips = !isBattle ? myData.ships : []; // Hide enemy ships
+            const displayShips = !isBattle ? myData.ships : [];
             const displayAttacks = !isBattle ? [] : myData.attacks;
 
             renderCoordinateGrid(container, displayShips, displayAttacks, false);
-
-            // Render Logs
             renderLogs(document.getElementById('battle-log-list'), gameState.logs || []);
         }
 
         function renderTeacherDashboard() {
-            // Teacher sees full vision of both P1 and P2
             document.getElementById('teacher-p1-name').innerText = gameState.p1?.name || 'Player 1';
             document.getElementById('teacher-p2-name').innerText = gameState.p2?.name || 'Player 2';
 
@@ -1149,14 +1026,12 @@
             document.getElementById('teacher-p1-hp').innerText = `血量: ${10 - p1Hits}/10`;
             document.getElementById('teacher-p2-hp').innerText = `血量: ${10 - p2Hits}/10`;
 
-            // Render both grids with revealed ships
             renderCoordinateGrid(document.getElementById('teacher-grid-p1'), gameState.p1?.ships || [], gameState.p2?.attacks || [], true);
             renderCoordinateGrid(document.getElementById('teacher-grid-p2'), gameState.p2?.ships || [], gameState.p1?.attacks || [], true);
 
             renderLogs(document.getElementById('teacher-global-logs'), gameState.logs || []);
         }
 
-        // Generic Canvas/Grid Renderer with Axis & Labels
         function renderCoordinateGrid(container, ships, attacks, revealAll = false) {
             container.innerHTML = '';
 
@@ -1168,37 +1043,33 @@
             container.style.gridTemplateRows = `repeat(${size}, 1fr)`;
             container.style.gap = '2px';
 
-            // Loop Y from max down to min (Cartesian orientation)
             for (let y = range.max; y >= range.min; y--) {
                 for (let x = range.min; x <= range.max; x++) {
                     const cell = document.createElement('div');
                     cell.className = 'grid-cell relative rounded flex items-center justify-center text-[9px] font-mono select-none';
 
-                    // Background color styling
                     const isXAxis = y === 0;
                     const isYAxis = x === 0;
 
                     if (isXAxis && isYAxis) {
-                        cell.classList.add('bg-slate-800', 'border', 'border-amber-500/50', 'text-amber-400'); // Origin
+                        cell.classList.add('bg-slate-800', 'border', 'border-amber-500/50', 'text-amber-400');
                     } else if (isXAxis || isYAxis) {
                         cell.classList.add('bg-slate-900', 'border', 'border-slate-700/80', 'text-slate-400');
                     } else {
                         cell.classList.add('bg-slate-950/80', 'border', 'border-slate-800/50', 'text-slate-600');
                     }
 
-                    // Check if Ship exists here
                     let shipCell = false;
                     ships.forEach(s => {
                         if (s.coords.some(c => c.x === x && c.y === y)) shipCell = true;
                     });
 
-                    if (shipCell && (revealAll || !revealAll)) {
+                    if (shipCell) {
                         cell.classList.remove('bg-slate-950/80');
                         cell.classList.add('bg-cyan-900/60', 'border-cyan-500/60');
                         cell.innerHTML = '<i class="fa-solid fa-shield-cat text-cyan-400 text-[10px]"></i>';
                     }
 
-                    // Check Attacks
                     const atk = attacks.find(a => a.x === x && a.y === y);
                     if (atk) {
                         cell.innerHTML = '';
@@ -1211,8 +1082,7 @@
                         }
                     }
 
-                    // Tooltip label on hover
-                    cell.title = `Coordinates: (${x}, ${y})`;
+                    cell.title = `座標: (${x}, ${y})`;
                     container.appendChild(cell);
                 }
             }
