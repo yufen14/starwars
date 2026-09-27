@@ -239,50 +239,69 @@
                                 </button>
                             </div>
 
-                            <!-- Ship Selection Dropdown -->
-                            <div>
-                                <label class="block text-xs text-slate-400 mb-1">選擇欲佈置艦艇</label>
-                                <select id="deploy-ship-select" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
-                                    <option value="4">殲星艦 (4 格)</option>
-                                    <option value="3">星際巡洋艦 (3 格)</option>
-                                    <option value="2">護衛艦 (2 格)</option>
-                                    <option value="1">X-翼戰機 (1 格)</option>
-                                </select>
-                            </div>
-
-                            <!-- Coordinates & Orientation Inputs -->
-                            <div class="grid grid-cols-2 gap-3">
+                            <!-- Deployment Input Form (Hidden when user is ready) -->
+                            <div id="deploy-form-inputs" class="space-y-4">
+                                <!-- Ship Selection Dropdown -->
                                 <div>
-                                    <label class="block text-xs text-slate-400 mb-1">起始 X 座標</label>
-                                    <input type="number" id="deploy-x" placeholder="X" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                                    <label class="block text-xs text-slate-400 mb-1">選擇欲佈置艦艇</label>
+                                    <select id="deploy-ship-select" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                                        <option value="4">殲星艦 (4 格)</option>
+                                        <option value="3">星際巡洋艦 (3 格)</option>
+                                        <option value="2">護衛艦 (2 格)</option>
+                                        <option value="1">X-翼戰機 (1 格)</option>
+                                    </select>
                                 </div>
+
+                                <!-- Coordinates & Orientation Inputs -->
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs text-slate-400 mb-1">起始 X 座標</label>
+                                        <input type="number" id="deploy-x" placeholder="X" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-slate-400 mb-1">起始 Y 座標</label>
+                                        <input type="number" id="deploy-y" placeholder="Y" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                                    </div>
+                                </div>
+
                                 <div>
-                                    <label class="block text-xs text-slate-400 mb-1">起始 Y 座標</label>
-                                    <input type="number" id="deploy-y" placeholder="Y" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                                    <label class="block text-xs text-slate-400 mb-1">艦艇延伸方向</label>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <label class="flex items-center space-x-2 bg-slate-950 p-2 rounded-lg border border-slate-800 cursor-pointer">
+                                            <input type="radio" name="deploy-dir" value="H" checked class="text-cyan-500 focus:ring-0">
+                                            <span class="text-xs text-slate-300">水平 (X軸延伸)</span>
+                                        </label>
+                                        <label class="flex items-center space-x-2 bg-slate-950 p-2 rounded-lg border border-slate-800 cursor-pointer">
+                                            <input type="radio" name="deploy-dir" value="V" class="text-cyan-500 focus:ring-0">
+                                            <span class="text-xs text-slate-300">垂直 (Y軸延伸)</span>
+                                        </label>
+                                    </div>
                                 </div>
+
+                                <button onclick="deployShipManual()" class="w-full py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl text-sm transition shadow-lg shadow-cyan-500/20">
+                                    確定佈署戰艦
+                                </button>
                             </div>
 
-                            <div>
-                                <label class="block text-xs text-slate-400 mb-1">艦艇延伸方向</label>
-                                <div class="grid grid-cols-2 gap-2">
-                                    <label class="flex items-center space-x-2 bg-slate-950 p-2 rounded-lg border border-slate-800 cursor-pointer">
-                                        <input type="radio" name="deploy-dir" value="H" checked class="text-cyan-500 focus:ring-0">
-                                        <span class="text-xs text-slate-300">水平 (X軸延伸)</span>
-                                    </label>
-                                    <label class="flex items-center space-x-2 bg-slate-950 p-2 rounded-lg border border-slate-800 cursor-pointer">
-                                        <input type="radio" name="deploy-dir" value="V" class="text-cyan-500 focus:ring-0">
-                                        <span class="text-xs text-slate-300">垂直 (Y軸延伸)</span>
-                                    </label>
+                            <!-- Waiting Opponent Notice (Shown when local player is ready) -->
+                            <div id="deploy-waiting-notice" class="hidden bg-cyan-950/80 border border-cyan-500/50 p-4 rounded-xl text-center space-y-2">
+                                <div class="flex items-center justify-center space-x-2 text-cyan-400 font-bold text-sm">
+                                    <i class="fa-solid fa-circle-check text-emerald-400"></i>
+                                    <span>您已完成 4 艘戰艦佈署！</span>
                                 </div>
+                                <p id="opponent-deploy-status-text" class="text-xs text-slate-300">
+                                    ⏳ 正在等待對手完成佈署...
+                                </p>
                             </div>
-
-                            <button onclick="deployShipManual()" class="w-full py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl text-sm transition shadow-lg shadow-cyan-500/20">
-                                確定佈署戰艦
-                            </button>
 
                             <!-- Fleet Status Progress -->
                             <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
-                                <span class="text-[11px] text-slate-400 block font-bold">已佈署艦艇進度:</span>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-[11px] text-slate-400 font-bold">已佈署艦艇進度:</span>
+                                    <button onclick="resetFleet()" class="text-[10px] text-red-400 hover:text-red-300 hover:underline">
+                                        <i class="fa-solid fa-rotate-left mr-1"></i>清空重擺
+                                    </button>
+                                </div>
                                 <div id="deployed-ships-list" class="flex flex-wrap gap-1.5">
                                     <!-- Rendered dynamically -->
                                 </div>
@@ -945,34 +964,17 @@
             if (y === 0 && x !== 0) return 'X 軸線上';
             return '原點 (0,0)';
         }
-
-        function calculateRelativeDirection(x, y, enemyShips) {
-            let minDistance = 999;
-            let targetCell = null;
-
-            enemyShips.forEach(s => {
-                s.coords.forEach(c => {
-                    const dist = Math.abs(c.x - x) + Math.abs(c.y - y);
-                    if (dist < minDistance && dist > 0) {
-                        minDistance = dist;
-                        targetCell = c;
-                    }
-                });
-            });
-
-            if (!targetCell) return '敵方全數陣亡或已無目標';
-
-            let dirX = targetCell.x > x ? '右' : targetCell.x < x ? '左' : '';
-            let dirY = targetCell.y > y ? '上' : targetCell.y < y ? '下' : '';
-
-            return `雷達感應：最近敵艦在當前落點偏【${dirY}${dirX}】位置（約 ${minDistance} 單位格）`;
-        }
-
-        function showAttackHint(quadrant, relative) {
-            const hintBox = document.getElementById('attack-hint-box');
-            hintBox.classList.remove('hidden');
-            document.getElementById('hint-quadrant-text').innerText = `彈道分析：砲彈落在 ${quadrant}`;
-            document.getElementById('hint-relative-text').innerText = relative;
+        function resetFleet() {
+            if (gameState.status === 'BATTLE') {
+                showToast('戰鬥已經開始，無法重新佈署！', 'error');
+                return;
+            }
+            const myData = currentUserRole === 'P1' ? gameState.p1 : gameState.p2;
+            myData.ships = [];
+            myData.ready = false;
+            sendActionUpdate();
+            renderStudentView();
+            showToast('已清空艦隊，請重新輸入座標佈署！', 'info');
         }
 
         function renderStudentView() {
@@ -993,6 +995,24 @@
             document.getElementById('turn-indicator-text').innerText = turnText;
 
             const myData = isP1 ? gameState.p1 : gameState.p2;
+            const opponentData = isP1 ? gameState.p2 : gameState.p1;
+
+            // Manage Deployment Form vs Waiting Notice
+            const deployForm = document.getElementById('deploy-form-inputs');
+            const waitingNotice = document.getElementById('deploy-waiting-notice');
+            if (myData.ready && gameState.status === 'DEPLOYING') {
+                if (deployForm) deployForm.classList.add('hidden');
+                if (waitingNotice) {
+                    waitingNotice.classList.remove('hidden');
+                    const oppCount = (opponentData.ships || []).length;
+                    document.getElementById('opponent-deploy-status-text').innerText = 
+                        `⏳ 正在等待對手（${opponentData.name || '對方'}）完成佈署（對方進度：${oppCount}/4 艘）...`;
+                }
+            } else {
+                if (deployForm) deployForm.classList.remove('hidden');
+                if (waitingNotice) waitingNotice.classList.add('hidden');
+            }
+
             const listContainer = document.getElementById('deployed-ships-list');
             listContainer.innerHTML = '';
             
