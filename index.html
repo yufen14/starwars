@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>星際大戰：座標平面戰役 - 雙人連線與教師觀戰版</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        alliance: '#00f3ff',
+                        empire: '#ff0055',
+                        space: '#0a0d14',
+                        panel: '#121824',
+                    },
+                    fontFamily: {
+                        mono: ['Courier New', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tone.js for Web Audio synthesis -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        body {
+            background-color: #05070c;
+            color: #e2e8f0;
+            background-image: 
+                radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 40px),
+                radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 30px),
+                radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 40px);
+            background-size: 550px 550px, 350px 350px, 250px 250px;
+            background-position: 0 0, 40px 60px, 130px 270px;
+        }
+        .glow-alliance { box-shadow: 0 0 15px rgba(0, 243, 255, 0.4); }
+        .glow-empire { box-shadow: 0 0 15px rgba(255, 0, 85, 0.4); }
+        .grid-cell { transition: all 0.2s ease; }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0a0d14; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #334155; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between font-sans antialiased selection:bg-cyan-500 selection:text-black">
+
+    <!-- Global Header -->
+    <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur-md sticky top-0 z-50 px-4 py-3">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-jedi text-2xl text-cyan-400"></i>
+                <h1 class="text-xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-500 to-red-500">
+                    STAR WARS : 座標平面戰役
+                </h1>
+            </div>
+            
+            <div id="room-status-badge" class="hidden flex items-center space-x-3 bg-slate-900 border border-slate-700 px-3 py-1.5 rounded-full text-xs">
+                <span class="flex h-2 w-2 relative">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span>房間: <strong id="display-room-code" class="text-cyan-400 tracking-widest">----</strong></span>
+                <span class="text-slate-600">|</span>
+                <span>身份: <strong id="display-role" class="text-amber-400">未選擇</strong></span>
+                <button onclick="leaveRoom()" class="ml-2 text-slate-400 hover:text-red-400 transition" title="離開房間">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Global Toast / Message Box -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <main class="flex-grow max-w-7xl w-full mx-auto p-4 flex flex-col justify-center">
+
+        <!-- VIEW 1: WELCOME / LOBBY VIEW -->
+        <div id="view-lobby" class="max-w-3xl mx-auto w-full space-y-8 py-8">
+            <div class="text-center space-y-3">
+                <div class="inline-block p-3 bg-cyan-950/50 border border-cyan-500/30 rounded-2xl mb-2">
+                    <i class="fa-solid fa-space-shuttle text-4xl text-cyan-400"></i>
+                </div>
+                <h2 class="text-3xl font-extrabold tracking-tight text-white">銀河系座標戰略基地</h2>
+                <p class="text-slate-400 text-sm max-w-md mx-auto">手動運用笛卡兒座標系（X, Y），指揮你的星際艦隊消滅對手，或身為導師開啟觀戰視角指揮戰局！</p>
+            </div>
+
+            <!-- Join / Create Forms -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Teacher Section -->
+                <div class="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-6 flex flex-col justify-between hover:border-amber-500/60 transition shadow-xl">
+                    <div class="space-y-4">
+                        <div class="flex items-center space-x-3 text-amber-400">
+                            <i class="fa-solid fa-chalkboard-user text-xl"></i>
+                            <h3 class="font-bold text-lg">教師 / 控制中心</h3>
+                        </div>
+                        <p class="text-xs text-slate-400 leading-relaxed">
+                            創建一個新的遊戲房間，獲得專屬 4 位數代碼分享給學生對戰。您將以上帝視角全盤掌握雙方佈局與攻擊軌跡。
+                        </p>
+                    </div>
+                    <button onclick="createRoomAsTeacher()" class="mt-6 w-full py-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-bold rounded-xl shadow-lg shadow-amber-500/20 transition flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-plus-circle"></i>
+                        <span>創建新房間 (觀戰視角)</span>
+                    </button>
+                </div>
+
+                <!-- Student Section -->
+                <div class="bg-slate-900/90 border border-cyan-500/30 rounded-2xl p-6 flex flex-col justify-between hover:border-cyan-500/60 transition shadow-xl">
+                    <div class="space-y-4">
+                        <div class="flex items-center space-x-3 text-cyan-400">
+                            <i class="fa-solid fa-gamepad text-xl"></i>
+                            <h3 class="font-bold text-lg">學生加入對戰</h3>
+                        </div>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-xs text-slate-400 mb-1">暱稱 / 代號</label>
+                                <input type="text" id="player-nickname" placeholder="例如：天行者" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-cyan-300 focus:outline-none focus:border-cyan-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-400 mb-1">房間代碼 (4位數)</label>
+                                <input type="text" id="join-room-code" placeholder="例如：STAR-8821" uppercase class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-cyan-300 focus:outline-none focus:border-cyan-500 uppercase tracking-widest font-mono">
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="joinRoomAsStudent()" class="mt-6 w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold rounded-xl shadow-lg shadow-cyan-500/20 transition flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-right-to-bracket"></i>
+                        <span>加入星際對戰</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Single Player / Practice -->
+            <div class="border-t border-slate-800 pt-6 text-center">
+                <button onclick="startPracticeMode()" class="text-xs text-slate-400 hover:text-cyan-400 underline underline-offset-4 transition">
+                    <i class="fa-solid fa-laptop-code mr-1"></i> 無需連線，開啟單人練習 / 本機展示模式
+                </button>
+            </div>
+        </div>
+
+        <!-- VIEW 2: ROOM WAITING LOBBY -->
+        <div id="view-waiting" class="hidden max-w-xl mx-auto w-full text-center space-y-6 py-12">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
+                <div class="absolute -right-10 -bottom-10 opacity-10 text-cyan-500">
+                    <i class="fa-solid fa-satellite-dish text-9xl"></i>
+                </div>
+                
+                <span class="inline-block px-3 py-1 bg-cyan-950 text-cyan-400 text-xs rounded-full border border-cyan-800/50 mb-4">雲端對戰等待室</span>
+                <h2 class="text-2xl font-bold text-white mb-2">等待玩家加入...</h2>
+                <p class="text-sm text-slate-400 mb-6">請將下方房間代碼分享給另一位玩家以開始遊戲</p>
+
+                <div class="bg-slate-950 border border-dashed border-cyan-500/50 p-4 rounded-xl inline-block mb-6">
+                    <span class="text-xs text-slate-500 block mb-1">ROOM CODE</span>
+                    <span id="waiting-room-code-display" class="text-3xl font-mono font-bold text-cyan-400 tracking-widest">----</span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4 max-w-md mx-auto text-left text-xs bg-slate-950/60 p-4 rounded-xl border border-slate-800">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-shield-halved text-cyan-400"></i>
+                        <span>Player 1: <strong id="p1-status-text" class="text-slate-300">等待中...</strong></span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-spaghetti-monster-flying text-red-400"></i>
+                        <span>Player 2: <strong id="p2-status-text" class="text-slate-300">等待中...</strong></span>
+                    </div>
+                </div>
+
+                <div class="mt-8">
+                    <i class="fa-solid fa-spinner animate-spin text-2xl text-cyan-500 mb-2"></i>
+                    <p class="text-xs text-slate-500">正在監聽雲端訊號中...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 3: STUDENT GAMEPLAY VIEW -->
+        <div id="view-student-game" class="hidden space-y-6">
+            <!-- HUD Top Info -->
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-wrap justify-between items-center gap-4">
+                <div class="flex items-center space-x-4">
+                    <div id="my-avatar" class="w-12 h-12 rounded-xl flex items-center justify-center text-xl bg-cyan-950 border border-cyan-500/50 text-cyan-400">
+                        <i class="fa-solid fa-user-astronaut"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <h3 id="my-role-name" class="font-bold text-cyan-400">反抗軍同盟</h3>
+                            <span id="game-phase-tag" class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">佈署階段</span>
+                        </div>
+                        <p class="text-xs text-slate-400" id="turn-indicator-text">請在下方手動輸入座標佈置您的戰艦</p>
+                    </div>
+                </div>
+
+                <!-- Quadrant Mode Selector -->
+                <div class="flex items-center space-x-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                    <span class="text-xs text-slate-400 px-2">坐標系:</span>
+                    <button onclick="setQuadrantMode('Q1')" id="btn-mode-q1" class="px-3 py-1 rounded-lg text-xs font-bold bg-cyan-600 text-white">
+                        第一象限 (0~10)
+                    </button>
+                    <button onclick="setQuadrantMode('ALL')" id="btn-mode-all" class="px-3 py-1 rounded-lg text-xs font-bold bg-slate-800 text-slate-400 hover:text-white">
+                        全四象限 (-5~+5)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Main Layout Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <!-- Board Display Container (Left/Center) -->
+                <div class="lg:col-span-7 bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col items-center justify-center">
+                    <div class="w-full flex justify-between items-center mb-3">
+                        <span id="board-title-text" class="text-xs font-bold text-cyan-400 tracking-wider flex items-center">
+                            <i class="fa-solid fa-radar mr-2"></i>我的星域座標圖
+                        </span>
+                        <div class="flex items-center space-x-3 text-[11px] text-slate-400">
+                            <span class="flex items-center"><span class="w-2.5 h-2.5 rounded-full bg-cyan-500 inline-block mr-1"></span> 艦艇</span>
+                            <span class="flex items-center"><span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block mr-1"></span> 擊中</span>
+                            <span class="flex items-center"><span class="w-2.5 h-2.5 rounded-full bg-slate-600 inline-block mr-1"></span> 未中</span>
+                        </div>
+                    </div>
+
+                    <!-- Interactive Dynamic Canvas/Grid -->
+                    <div id="student-grid-container" class="w-full aspect-square max-w-[480px] bg-slate-950 border border-slate-800 rounded-xl relative p-2 flex flex-col justify-between">
+                        <!-- Rendered via JS -->
+                    </div>
+                </div>
+
+                <!-- Input Controls & Logs Container (Right) -->
+                <div class="lg:col-span-5 flex flex-col space-y-4">
+                    <!-- Control Panel Card -->
+                    <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4">
+                        <!-- PHASE 1: DEPLOYMENT CONTROLS -->
+                        <div id="panel-deploy-controls" class="space-y-4">
+                            <div class="border-b border-slate-800 pb-2 flex justify-between items-center">
+                                <h4 class="font-bold text-sm text-cyan-400"><i class="fa-solid fa-ship mr-1"></i> 手動座標佈署</h4>
+                                <button onclick="autoDeployDemo()" class="text-[11px] bg-slate-800 hover:bg-slate-700 text-cyan-300 px-2 py-1 rounded border border-cyan-800/50">
+                                    <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>一鍵示範佈署
+                                </button>
+                            </div>
+
+                            <!-- Ship Selection Dropdown -->
+                            <div>
+                                <label class="block text-xs text-slate-400 mb-1">選擇欲佈置艦艇</label>
+                                <select id="deploy-ship-select" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                                    <option value="4">殲星艦 (4 格)</option>
+                                    <option value="3">星際巡洋艦 (3 格)</option>
+                                    <option value="2">護衛艦 (2 格)</option>
+                                    <option value="1">X-翼戰機 (1 格)</option>
+                                </select>
+                            </div>
+
+                            <!-- Coordinates & Orientation Inputs -->
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs text-slate-400 mb-1">起始 X 座標</label>
+                                    <input type="number" id="deploy-x" placeholder="X" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-slate-400 mb-1">起始 Y 座標</label>
+                                    <input type="number" id="deploy-y" placeholder="Y" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs text-slate-400 mb-1">艦艇延伸方向</label>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <label class="flex items-center space-x-2 bg-slate-950 p-2 rounded-lg border border-slate-800 cursor-pointer">
+                                        <input type="radio" name="deploy-dir" value="H" checked class="text-cyan-500 focus:ring-0">
+                                        <span class="text-xs text-slate-300">水平 (X軸延伸)</span>
+                                    </label>
+                                    <label class="flex items-center space-x-2 bg-slate-950 p-2 rounded-lg border border-slate-800 cursor-pointer">
+                                        <input type="radio" name="deploy-dir" value="V" class="text-cyan-500 focus:ring-0">
+                                        <span class="text-xs text-slate-300">垂直 (Y軸延伸)</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <button onclick="deployShipManual()" class="w-full py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl text-sm transition shadow-lg shadow-cyan-500/20">
+                                確定佈署戰艦
+                            </button>
+
+                            <!-- Fleet Status Progress -->
+                            <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
+                                <span class="text-[11px] text-slate-400 block font-bold">已佈署艦艇進度:</span>
+                                <div id="deployed-ships-list" class="flex flex-wrap gap-1.5">
+                                    <!-- Rendered dynamically -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- PHASE 2: FIRE / ATTACK CONTROLS -->
+                        <div id="panel-fire-controls" class="hidden space-y-4">
+                            <div class="border-b border-slate-800 pb-2">
+                                <h4 class="font-bold text-sm text-red-400"><i class="fa-solid fa-crosshairs mr-1"></i> 星際雷射砲擊控制台</h4>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs text-slate-400 mb-1">目標 X 座標</label>
+                                    <input type="number" id="fire-x" placeholder="X" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-slate-400 mb-1">目標 Y 座標</label>
+                                    <input type="number" id="fire-y" placeholder="Y" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500">
+                                </div>
+                            </div>
+
+                            <button id="btn-fire" onclick="fireLaser()" class="w-full py-3 bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-bold rounded-xl text-sm transition shadow-lg shadow-red-500/20 flex items-center justify-center space-x-2">
+                                <i class="fa-solid fa-meteor"></i>
+                                <span>發射雷射砲</span>
+                            </button>
+
+                            <!-- Quadrant & Orientation Hint Banner -->
+                            <div id="attack-hint-box" class="hidden bg-slate-950 border border-slate-800 p-3 rounded-xl space-y-1">
+                                <span class="text-[10px] text-slate-500 font-bold block">彈道雷達引導提示</span>
+                                <p id="hint-quadrant-text" class="text-xs text-cyan-400 font-bold"></p>
+                                <p id="hint-relative-text" class="text-xs text-slate-300"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Battle Log Output -->
+                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex-grow flex flex-col justify-between min-h-[180px]">
+                        <span class="text-xs font-bold text-slate-400 mb-2 block"><i class="fa-solid fa-list-ul mr-1"></i> 戰況對話紀錄</span>
+                        <div id="battle-log-list" class="bg-slate-950 border border-slate-800 rounded-xl p-3 h-36 overflow-y-auto text-xs space-y-1.5 font-mono">
+                            <p class="text-slate-600">-- 戰情紀錄監控中 --</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 4: TEACHER SPECTATOR DASHBOARD -->
+        <div id="view-teacher-dashboard" class="hidden space-y-6">
+            <!-- Spectator Header -->
+            <div class="bg-slate-900 border border-amber-500/30 p-4 rounded-2xl flex flex-wrap justify-between items-center gap-4 shadow-xl">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl bg-amber-950 border border-amber-500/50 flex items-center justify-center text-amber-400">
+                        <i class="fa-solid fa-eye text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-amber-400">上帝視角觀戰大廳 (Spectator HUD)</h3>
+                        <p class="text-xs text-slate-400">完全即時掌握雙方艦隊佈署隱藏位置與發射軌跡</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-3">
+                    <!-- Quadrant Switcher for Teacher -->
+                    <div class="flex items-center space-x-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                        <button onclick="setQuadrantMode('Q1')" id="teacher-btn-q1" class="px-3 py-1 rounded-lg text-xs font-bold bg-amber-600 text-slate-950">
+                            第一象限 (0~10)
+                        </button>
+                        <button onclick="setQuadrantMode('ALL')" id="teacher-btn-all" class="px-3 py-1 rounded-lg text-xs font-bold bg-slate-800 text-slate-400 hover:text-white">
+                            全四象限 (-5~+5)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Side-by-Side Dual Player Grid HUD -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Player 1 View -->
+                <div class="bg-slate-900 border border-cyan-500/30 p-4 rounded-2xl space-y-3">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-3 h-3 rounded-full bg-cyan-400"></span>
+                            <h4 id="teacher-p1-name" class="font-bold text-cyan-400 text-sm">Player 1 (反抗軍)</h4>
+                        </div>
+                        <span id="teacher-p1-hp" class="text-xs bg-slate-950 px-2.5 py-1 rounded-full border border-cyan-900 text-cyan-300 font-mono">血量: 10/10</span>
+                    </div>
+
+                    <div id="teacher-grid-p1" class="w-full aspect-square bg-slate-950 border border-slate-800 rounded-xl p-2">
+                        <!-- P1 grid -->
+                    </div>
+                </div>
+
+                <!-- Player 2 View -->
+                <div class="bg-slate-900 border border-red-500/30 p-4 rounded-2xl space-y-3">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-3 h-3 rounded-full bg-red-500"></span>
+                            <h4 id="teacher-p2-name" class="font-bold text-red-400 text-sm">Player 2 (銀河帝國)</h4>
+                        </div>
+                        <span id="teacher-p2-hp" class="text-xs bg-slate-950 px-2.5 py-1 rounded-full border border-red-900 text-red-300 font-mono">血量: 10/10</span>
+                    </div>
+
+                    <div id="teacher-grid-p2" class="w-full aspect-square bg-slate-950 border border-slate-800 rounded-xl p-2">
+                        <!-- P2 grid -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Global Spectator Logs -->
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+                <h4 class="text-xs font-bold text-amber-400 mb-2"><i class="fa-solid fa-receipt mr-1"></i> 全域對戰日誌</h4>
+                <div id="teacher-global-logs" class="bg-slate-950 border border-slate-800 rounded-xl p-3 h-32 overflow-y-auto text-xs space-y-1 font-mono">
+                    <p class="text-slate-600">觀戰大廳數據加載中...</p>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Global Footer -->
+    <footer class="border-t border-slate-800 py-4 text-center text-xs text-slate-600">
+        <p>星際大戰座標平面戰役 &copy; 數學座標系教學專用系統</p>
+    </footer>
+
+    <!-- Firebase Standard Integration -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase Configuration setup
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'starwars-coord-battle';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config) 
+            : { apiKey: "demo", authDomain: "demo.firebaseapp.com", projectId: "demo" };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Global State Window Attachments for App logic
+        window.firebaseDB = db;
+        window.appId = appId;
+        window.doc = doc;
+        window.setDoc = setDoc;
+        window.getDoc = getDoc;
+        window.updateDoc = updateDoc;
+        window.onSnapshot = onSnapshot;
+
+        // Initialize Authentication
+        async function initAuth() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                console.log("Firebase Auth Success, UID:", auth.currentUser?.uid);
+            } catch (err) {
+                console.warn("Auth Fallback:", err);
+            }
+        }
+        initAuth();
+    </script>
+
+    <!-- Core Game Logic Script -->
+    <script>
+        // Local Broadcast Channel fallback for multi-tab synchronization
+        const localSyncChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('starwars_room_sync') : null;
+        if (localSyncChannel) {
+            localSyncChannel.onmessage = (event) => {
+                if (event.data && event.data.code === currentRoomCode) {
+                    gameState = event.data.state;
+                    currentQuadrantMode = gameState.quadrantMode || 'Q1';
+                    syncUIState();
+                }
+            };
+        }
+
+        // Helper functions for local state persistence
+        function saveGameStateLocalFallback(code, data) {
+            localStorage.setItem(`room_${code}`, JSON.stringify(data));
+            if (localSyncChannel) {
+                localSyncChannel.postMessage({ code: code, state: data });
+            }
+        }
+
+        function fetchGameStateLocalFallback(code) {
+            const raw = localStorage.getItem(`room_${code}`);
+            return raw ? JSON.parse(raw) : null;
+        }
+
+        function updateGameStateLocalFallback(code, payload) {
+            let current = fetchGameStateLocalFallback(code) || {};
+            
+            // Apply payload updates
+            Object.keys(payload).forEach(key => {
+                if (key.includes('.')) {
+                    const [parent, child] = key.split('.');
+                    if (!current[parent]) current[parent] = {};
+                    current[parent][child] = payload[key];
+                } else {
+                    current[key] = payload[key];
+                }
+            });
+
+            saveGameStateLocalFallback(code, current);
+            return current;
+        }
+
+        // Sound Synthesis with Tone.js
+        const AudioEngine = {
+            playLaser() {
+                try {
+                    const synth = new Tone.Synth({
+                        oscillator: { type: "sawtooth" },
+                        envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.1 }
+                    }).toDestination();
+                    synth.triggerAttackRelease("C6", "8n");
+                } catch(e){}
+            },
+            playHit() {
+                try {
+                    const mem = new Tone.MembraneSynth().toDestination();
+                    mem.triggerAttackRelease("C2", "4n");
+                } catch(e){}
+            },
+            playMiss() {
+                try {
+                    const synth = new Tone.Synth({ oscillator: { type: "sine" } }).toDestination();
+                    synth.triggerAttackRelease("A3", "16n");
+                } catch(e){}
+            }
+        };
+
+        // Core App Data Structures
+        let currentRoomCode = null;
+        let currentUserRole = null; // 'P1', 'P2', 'SPECTATOR'
+        let currentQuadrantMode = 'Q1'; // 'Q1' (0~10) or 'ALL' (-5~+5)
+        let isPracticeMode = false;
+
+        // Ship Fleet Requirements (Total 10 grids)
+        const FLEET_SPECS = [
+            { type: 'destroyer', name: '殲星艦', size: 4 },
+            { type: 'cruiser', name: '星際巡洋艦', size: 3 },
+            { type: 'frigate', name: '護衛艦', size: 2 },
+            { type: 'fighter', name: 'X-翼戰機', size: 1 },
+        ];
+
+        // Local state replica
+        let gameState = {
+            status: 'WAITING', // WAITING, DEPLOYING, BATTLE, ENDED
+            turn: 'P1',
+            p1: { name: 'Player 1', ships: [], attacks: [], ready: false },
+            p2: { name: 'Player 2', ships: [], attacks: [], ready: false },
+            logs: []
+        };
+
+        let unsubscribeRoom = null;
+
+        function showToast(msg, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const color = type === 'error' ? 'border-red-500 bg-red-950 text-red-200' : 'border-cyan-500 bg-slate-900 text-cyan-200';
+            toast.className = `px-4 py-3 rounded-xl border text-xs shadow-2xl transition-all duration-300 transform translate-y-2 pointer-events-auto ${color}`;
+            toast.innerText = msg;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // Generate 4-digit Room Code
+        function generateRoomCode() {
+            const num = Math.floor(1000 + Math.random() * 9000);
+            return `STAR-${num}`;
+        }
+
+        // Teacher Creates Room
+        async function createRoomAsTeacher() {
+            const code = generateRoomCode();
+            currentRoomCode = code;
+            currentUserRole = 'SPECTATOR';
+            isPracticeMode = false;
+
+            const initialData = {
+                status: 'WAITING',
+                turn: 'P1',
+                quadrantMode: 'Q1',
+                p1: { name: '反抗軍同盟', ships: [], attacks: [], ready: false, joined: false },
+                p2: { name: '銀河帝國', ships: [], attacks: [], ready: false, joined: false },
+                logs: ['教師已建立房間，等待玩家加入...']
+            };
+
+            await saveGameStateToCloud(code, initialData);
+            setupRoomListener(code);
+            updateRoleBadge('教師觀戰者');
+            switchView('view-teacher-dashboard');
+            showToast(`房間 ${code} 已順利創建！`, 'success');
+        }
+
+        // Student Joins Room
+        async function joinRoomAsStudent() {
+            const codeInput = document.getElementById('join-room-code').value.trim().toUpperCase();
+            const nickname = document.getElementById('player-nickname').value.trim() || '飛行員';
+
+            if (!codeInput) {
+                showToast('請輸入 4 位數房間代碼！', 'error');
+                return;
+            }
+
+            currentRoomCode = codeInput;
+            isPracticeMode = false;
+
+            // Fetch room state
+            const snapshotData = await fetchGameStateFromCloud(codeInput);
+            if (!snapshotData) {
+                showToast('找不到該房間代碼，請確認後重試！', 'error');
+                return;
+            }
+
+            let roleAssigned = 'SPECTATOR';
+            let updatePayload = {};
+
+            if (!snapshotData.p1?.joined) {
+                roleAssigned = 'P1';
+                updatePayload['p1.joined'] = true;
+                updatePayload['p1.name'] = `${nickname} (P1)`;
+            } else if (!snapshotData.p2?.joined) {
+                roleAssigned = 'P2';
+                updatePayload['p2.joined'] = true;
+                updatePayload['p2.name'] = `${nickname} (P2)`;
+            } else {
+                roleAssigned = 'SPECTATOR';
+                showToast('房間兩位玩家已滿，自動轉為觀戰視角', 'info');
+            }
+
+            currentUserRole = roleAssigned;
+            updateRoleBadge(roleAssigned === 'P1' ? 'P1 (反抗軍)' : roleAssigned === 'P2' ? 'P2 (帝國)' : '觀戰者');
+
+            if (Object.keys(updatePayload).length > 0) {
+                updatePayload.logs = [...(snapshotData.logs || []), `${nickname} 以 ${roleAssigned} 身份加入`];
+                if (snapshotData.p1?.joined || roleAssigned === 'P2') {
+                    updatePayload.status = 'DEPLOYING';
+                }
+                await updateGameStateToCloud(codeInput, updatePayload);
+            }
+
+            setupRoomListener(codeInput);
+        }
+
+        // Single Player Practice Mode
+        function startPracticeMode() {
+            isPracticeMode = true;
+            currentRoomCode = 'LOCAL-PRACTICE';
+            currentUserRole = 'P1';
+
+            gameState = {
+                status: 'DEPLOYING',
+                turn: 'P1',
+                quadrantMode: 'Q1',
+                p1: { name: '反抗軍 (你)', ships: [], attacks: [], ready: false, joined: true },
+                p2: { name: '帝國 AI/本機', ships: [], attacks: [], ready: true, joined: true },
+                logs: ['開啟單人練習模式！請完成佈署。']
+            };
+
+            // Auto-deploy for AI (P2)
+            autoDeployForAI();
+
+            updateRoleBadge('單人練習模式');
+            switchView('view-student-game');
+            renderStudentView();
+        }
+
+        function autoDeployForAI() {
+            gameState.p2.ships = generateRandomFleet('Q1');
+        }
+
+        function generateRandomFleet(qMode) {
+            const min = qMode === 'Q1' ? 0 : -5;
+            const max = qMode === 'Q1' ? 10 : 5;
+            let ships = [];
+
+            FLEET_SPECS.forEach(spec => {
+                let placed = false;
+                while (!placed) {
+                    const dir = Math.random() > 0.5 ? 'H' : 'V';
+                    const startX = Math.floor(Math.random() * (max - min + 1)) + min;
+                    const startY = Math.floor(Math.random() * (max - min + 1)) + min;
+
+                    let coords = [];
+                    let valid = true;
+
+                    for (let i = 0; i < spec.size; i++) {
+                        const cx = dir === 'H' ? startX + i : startX;
+                        const cy = dir === 'V' ? startY + i : startY;
+
+                        if (cx < min || cx > max || cy < min || cy > max) {
+                            valid = false;
+                            break;
+                        }
+                        coords.push({ x: cx, y: cy });
+                    }
+
+                    if (valid) {
+                        // Check overlap
+                        const overlap = ships.some(s => s.coords.some(c1 => coords.some(c2 => c1.x === c2.x && c1.y === c2.y)));
+                        if (!overlap) {
+                            ships.push({ type: spec.type, size: spec.size, coords: coords });
+                            placed = true;
+                        }
+                    }
+                }
+            });
+            return ships;
+        }
+
+        function setupRoomListener(code) {
+            if (isPracticeMode) return;
+
+            const db = window.firebaseDB;
+            if (unsubscribeRoom) {
+                unsubscribeRoom();
+                unsubscribeRoom = null;
+            }
+
+            try {
+                if (window.doc && db) {
+                    const docRef = window.doc(db, 'artifacts', window.appId, 'public', 'data', 'rooms', code);
+                    unsubscribeRoom = window.onSnapshot(docRef, (docSnap) => {
+                        if (docSnap.exists()) {
+                            gameState = docSnap.data();
+                            currentQuadrantMode = gameState.quadrantMode || 'Q1';
+                            syncUIState();
+                        }
+                    }, (err) => {
+                        console.warn("Firestore snapshot error, falling back to local sync:", err);
+                    });
+                }
+            } catch (err) {
+                console.warn("Firestore setupListener fallback:", err);
+            }
+
+            // Always attempt initial state sync
+            const localState = fetchGameStateLocalFallback(code);
+            if (localState) {
+                gameState = localState;
+                currentQuadrantMode = gameState.quadrantMode || 'Q1';
+                syncUIState();
+            }
+        }
+
+        async function saveGameStateToCloud(code, data) {
+            if (isPracticeMode) return;
+            saveGameStateLocalFallback(code, data);
+            try {
+                const db = window.firebaseDB;
+                if (!window.doc || !db) return;
+                const docRef = window.doc(db, 'artifacts', window.appId, 'public', 'data', 'rooms', code);
+                await window.setDoc(docRef, data);
+            } catch (err) {
+                console.warn("Cloud save notice:", err);
+            }
+        }
+
+        async function updateGameStateToCloud(code, payload) {
+            if (isPracticeMode) return;
+            const updated = updateGameStateLocalFallback(code, payload);
+            try {
+                const db = window.firebaseDB;
+                if (!window.doc || !db) return;
+                const docRef = window.doc(db, 'artifacts', window.appId, 'public', 'data', 'rooms', code);
+                await window.updateDoc(docRef, payload);
+            } catch (err) {
+                console.warn("Cloud update notice:", err);
+            }
+        }
+
+        async function fetchGameStateFromCloud(code) {
+            try {
+                const db = window.firebaseDB;
+                if (window.doc && db) {
+                    const docRef = window.doc(db, 'artifacts', window.appId, 'public', 'data', 'rooms', code);
+                    const snap = await window.getDoc(docRef);
+                    if (snap.exists()) return snap.data();
+                }
+            } catch (err) {
+                console.warn("Cloud fetch notice:", err);
+            }
+            return fetchGameStateLocalFallback(code);
+        }
+
+        function syncUIState() {
+            if (currentUserRole === 'SPECTATOR') {
+                switchView('view-teacher-dashboard');
+                renderTeacherDashboard();
+                return;
+            }
+
+            if (gameState.status === 'WAITING') {
+                switchView('view-waiting');
+                document.getElementById('waiting-room-code-display').innerText = currentRoomCode;
+                document.getElementById('p1-status-text').innerText = gameState.p1?.joined ? gameState.p1.name : '等待中...';
+                document.getElementById('p2-status-text').innerText = gameState.p2?.joined ? gameState.p2.name : '等待中...';
+            } else {
+                switchView('view-student-game');
+                renderStudentView();
+            }
+        }
+
+        function switchView(viewId) {
+            ['view-lobby', 'view-waiting', 'view-student-game', 'view-teacher-dashboard'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            document.getElementById(viewId).classList.remove('hidden');
+
+            const badge = document.getElementById('room-status-badge');
+            if (viewId !== 'view-lobby') {
+                badge.classList.remove('hidden');
+                document.getElementById('display-room-code').innerText = currentRoomCode || '----';
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        function updateRoleBadge(roleText) {
+            document.getElementById('display-role').innerText = roleText;
+        }
+
+        function leaveRoom() {
+            if (unsubscribeRoom) unsubscribeRoom();
+            currentRoomCode = null;
+            currentUserRole = null;
+            switchView('view-lobby');
+            showToast('已離開房間', 'info');
+        }
+
+        function setQuadrantMode(mode) {
+            currentQuadrantMode = mode;
+            if (!isPracticeMode && currentRoomCode) {
+                updateGameStateToCloud(currentRoomCode, { quadrantMode: mode });
+            } else {
+                gameState.quadrantMode = mode;
+                syncUIState();
+            }
+        }
+
+        // Manual Ship Deployment Logic
+        function deployShipManual() {
+            const shipSize = parseInt(document.getElementById('deploy-ship-select').value);
+            const x = parseInt(document.getElementById('deploy-x').value);
+            const y = parseInt(document.getElementById('deploy-y').value);
+            const dir = document.querySelector('input[name="deploy-dir"]:checked').value;
+
+            if (isNaN(x) || isNaN(y)) {
+                showToast('請輸入正確的數字座標！', 'error');
+                return;
+            }
+
+            const range = currentQuadrantMode === 'Q1' ? { min: 0, max: 10 } : { min: -5, max: 5 };
+
+            // Generate requested ship coordinates
+            let coords = [];
+            for (let i = 0; i < shipSize; i++) {
+                const cx = dir === 'H' ? x + i : x;
+                const cy = dir === 'V' ? y + i : y;
+
+                if (cx < range.min || cx > range.max || cy < range.min || cy > range.max) {
+                    showToast(`座標 (${cx},${cy}) 超出目前邊界 [${range.min} ~ ${range.max}]！`, 'error');
+                    return;
+                }
+                coords.push({ x: cx, y: cy });
+            }
+
+            const myData = currentUserRole === 'P1' ? gameState.p1 : gameState.p2;
+            const existingShips = myData.ships || [];
+
+            // Check if ship type already deployed
+            const spec = FLEET_SPECS.find(s => s.size === shipSize);
+            if (existingShips.some(s => s.type === spec.type)) {
+                showToast(`您已經佈署過【${spec.name}】了！`, 'error');
+                return;
+            }
+
+            // Check overlap
+            const overlap = existingShips.some(s => s.coords.some(c1 => coords.some(c2 => c1.x === c2.x && c1.y === c2.y)));
+            if (overlap) {
+                showToast('艦艇不可與既有艦艇重疊！', 'error');
+                return;
+            }
+
+            // Add ship
+            existingShips.push({ type: spec.type, size: shipSize, coords: coords });
+            myData.ships = existingShips;
+
+            // Check if all 4 ships ready
+            if (existingShips.length === 4) {
+                myData.ready = true;
+                showToast('恭喜！所有戰艦已完成佈署！', 'success');
+            } else {
+                showToast(`已成功佈署【${spec.name}】`, 'info');
+            }
+
+            // Check if both P1 and P2 ready
+            let payload = {};
+            const otherRoleKey = currentUserRole === 'P1' ? 'p2' : 'p1';
+            const myRoleKey = currentUserRole === 'P1' ? 'p1' : 'p2';
+
+            payload[`${myRoleKey}.ships`] = myData.ships;
+            payload[`${myRoleKey}.ready`] = myData.ready;
+
+            if (myData.ready && gameState[otherRoleKey]?.ready) {
+                payload.status = 'BATTLE';
+                payload.logs = [...(gameState.logs || []), '雙方艦隊佈署完畢，星際對戰正式開始！'];
+            }
+
+            if (!isPracticeMode) {
+                updateGameStateToCloud(currentRoomCode, payload);
+            } else {
+                if (myData.ready) gameState.status = 'BATTLE';
+                renderStudentView();
+            }
+        }
+
+        // Auto Deploy Demo Helper
+        function autoDeployDemo() {
+            const myData = currentUserRole === 'P1' ? gameState.p1 : gameState.p2;
+            myData.ships = generateRandomFleet(currentQuadrantMode);
+            myData.ready = true;
+
+            let payload = {};
+            const myRoleKey = currentUserRole === 'P1' ? 'p1' : 'p2';
+            const otherRoleKey = currentUserRole === 'P1' ? 'p2' : 'p1';
+
+            payload[`${myRoleKey}.ships`] = myData.ships;
+            payload[`${myRoleKey}.ready`] = true;
+
+            if (gameState[otherRoleKey]?.ready) {
+                payload.status = 'BATTLE';
+            }
+
+            if (!isPracticeMode) {
+                updateGameStateToCloud(currentRoomCode, payload);
+            } else {
+                gameState.status = 'BATTLE';
+                renderStudentView();
+            }
+            showToast('已為您一鍵自動佈置示範艦隊！', 'success');
+        }
+
+        function fireLaser() {
+            if (gameState.status !== 'BATTLE') {
+                showToast('目前非戰鬥階段！', 'error');
+                return;
+            }
+
+            if (gameState.turn !== currentUserRole) {
+                showToast('請等待對方回合結束！', 'error');
+                return;
+            }
+
+            const x = parseInt(document.getElementById('fire-x').value);
+            const y = parseInt(document.getElementById('fire-y').value);
+
+            if (isNaN(x) || isNaN(y)) {
+                showToast('請輸入完整的砲擊 target 座標！', 'error');
+                return;
+            }
+
+            const range = currentQuadrantMode === 'Q1' ? { min: 0, max: 10 } : { min: -5, max: 5 };
+            if (x < range.min || x > range.max || y < range.min || y > range.max) {
+                showToast(`砲擊座標超出範圍 [${range.min} ~ ${range.max}]！`, 'error');
+                return;
+            }
+
+            const opponentRoleKey = currentUserRole === 'P1' ? 'p2' : 'p1';
+            const opponentData = gameState[opponentRoleKey];
+            const myData = currentUserRole === 'P1' ? gameState.p1 : gameState.p2;
+
+            // Check if already fired at this coord
+            if (myData.attacks.some(a => a.x === x && a.y === y)) {
+                showToast('您已經砲擊過此座標了！', 'error');
+                return;
+            }
+
+            // Play sound
+            AudioEngine.playLaser();
+
+            // Check hit
+            let isHit = false;
+            opponentData.ships.forEach(s => {
+                s.coords.forEach(c => {
+                    if (c.x === x && c.y === y) isHit = true;
+                });
+            });
+
+            if (isHit) AudioEngine.playHit(); else AudioEngine.playMiss();
+
+            // Register attack
+            myData.attacks.push({ x: x, y: y, hit: isHit });
+
+            // Quadrant and Relative Guidance Calculation
+            const quadrantStr = calculateQuadrant(x, y);
+            const relativeHint = calculateRelativeDirection(x, y, opponentData.ships);
+
+            const logMsg = `${currentUserRole === 'P1' ? '反抗軍' : '銀河帝國'} 砲擊 (${x}, ${y}) -> ${isHit ? '💥 擊中戰艦！' : '🌊 未擊中'}`;
+
+            // Check Win Condition
+            const totalShipCells = 10;
+            const totalHits = myData.attacks.filter(a => a.hit).length;
+            let isWin = totalHits >= totalShipCells;
+
+            let payload = {};
+            const myRoleKey = currentUserRole === 'P1' ? 'p1' : 'p2';
+            payload[`${myRoleKey}.attacks`] = myData.attacks;
+            payload.turn = currentUserRole === 'P1' ? 'P2' : 'P1';
+            payload.logs = [...(gameState.logs || []), logMsg];
+
+            if (isWin) {
+                payload.status = 'ENDED';
+                payload.logs.push(`🎉 戰役結束！${currentUserRole === 'P1' ? '反抗軍同盟' : '銀河帝國'} 獲得終極勝利！`);
+            }
+
+            if (!isPracticeMode) {
+                updateGameStateToCloud(currentRoomCode, payload);
+            } else {
+                gameState[myRoleKey].attacks = myData.attacks;
+                gameState.turn = payload.turn;
+                gameState.logs.push(logMsg);
+
+                // AI Auto Attack back if practice mode
+                if (!isWin && gameState.turn === 'P2') {
+                    setTimeout(aiAttackTurn, 1000);
+                }
+                renderStudentView();
+            }
+
+            // Display UI Hint
+            showAttackHint(quadrantStr, relativeHint);
+        }
+
+        function aiAttackTurn() {
+            const range = currentQuadrantMode === 'Q1' ? { min: 0, max: 10 } : { min: -5, max: 5 };
+            let x, y, repeat = true;
+
+            while (repeat) {
+                x = Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
+                y = Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
+                repeat = gameState.p2.attacks.some(a => a.x === x && a.y === y);
+            }
+
+            let isHit = false;
+            gameState.p1.ships.forEach(s => {
+                s.coords.forEach(c => {
+                    if (c.x === x && c.y === y) isHit = true;
+                });
+            });
+
+            gameState.p2.attacks.push({ x: x, y: y, hit: isHit });
+            gameState.turn = 'P1';
+            gameState.logs.push(`帝國 AI 砲擊 (${x}, ${y}) -> ${isHit ? '💥 擊中你的戰艦！' : '🌊 未擊中'}`);
+            renderStudentView();
+        }
+
+        function calculateQuadrant(x, y) {
+            if (x > 0 && y > 0) return '第一象限 (Q1)';
+            if (x < 0 && y > 0) return '第二象限 (Q2)';
+            if (x < 0 && y < 0) return '第三象限 (Q3)';
+            if (x > 0 && y < 0) return '第四象限 (Q4)';
+            if (x === 0 && y !== 0) return 'Y 軸線上';
+            if (y === 0 && x !== 0) return 'X 軸線上';
+            return '原點 (0,0)';
+        }
+
+        function calculateRelativeDirection(x, y, enemyShips) {
+            // Find nearest unhit ship cell
+            let minDistance = 999;
+            let targetCell = null;
+
+            enemyShips.forEach(s => {
+                s.coords.forEach(c => {
+                    const dist = Math.abs(c.x - x) + Math.abs(c.y - y);
+                    if (dist < minDistance && dist > 0) {
+                        minDistance = dist;
+                        targetCell = c;
+                    }
+                });
+            });
+
+            if (!targetCell) return '敵方全數陣亡或已無目標';
+
+            let dirX = targetCell.x > x ? '右' : targetCell.x < x ? '左' : '';
+            let dirY = targetCell.y > y ? '上' : targetCell.y < y ? '下' : '';
+
+            return `雷達感應：最近敵艦在當前落點偏【${dirY}${dirX}】位置（約 ${minDistance} 單位格）`;
+        }
+
+        function showAttackHint(quadrant, relative) {
+            const hintBox = document.getElementById('attack-hint-box');
+            hintBox.classList.remove('hidden');
+            document.getElementById('hint-quadrant-text').innerText = `彈道分析：砲彈落在 ${quadrant}`;
+            document.getElementById('hint-relative-text').innerText = relative;
+        }
+
+        function renderStudentView() {
+            // Phase Toggle
+            const isBattle = gameState.status === 'BATTLE' || gameState.status === 'ENDED';
+            document.getElementById('panel-deploy-controls').classList.toggle('hidden', isBattle);
+            document.getElementById('panel-fire-controls').classList.toggle('hidden', !isBattle);
+
+            document.getElementById('game-phase-tag').innerText = 
+                gameState.status === 'DEPLOYING' ? '佈署階段' : 
+                gameState.status === 'BATTLE' ? '戰鬥階段' : '遊戲結束';
+
+            // Role Banner Setup
+            const isP1 = currentUserRole === 'P1';
+            document.getElementById('my-role-name').innerText = isP1 ? '反抗軍同盟 (Alliance)' : '銀河帝國 (Imperial Fleet)';
+            
+            // Turn text
+            const isMyTurn = gameState.turn === currentUserRole;
+            const turnText = !isBattle ? '請在右側輸入座標，佈置您的 4 艘戰艦' :
+                isMyTurn ? '⚔️ 輪到您的回合！請輸入攻擊座標並發射雷射' : '⏳ 等待對方思考並發射砲擊...';
+            document.getElementById('turn-indicator-text').innerText = turnText;
+
+            // Render Deployed Ships List Progress
+            const myData = isP1 ? gameState.p1 : gameState.p2;
+            const listContainer = document.getElementById('deployed-ships-list');
+            listContainer.innerHTML = '';
+            
+            FLEET_SPECS.forEach(s => {
+                const isPlaced = (myData.ships || []).some(ship => ship.type === s.type);
+                const tag = document.createElement('span');
+                tag.className = `px-2 py-0.5 rounded text-[10px] border ${isPlaced ? 'bg-cyan-950 border-cyan-500/50 text-cyan-300' : 'bg-slate-900 border-slate-800 text-slate-600'}`;
+                tag.innerText = `${s.name} (${s.size}格) ${isPlaced ? '✓' : ''}`;
+                listContainer.appendChild(tag);
+            });
+
+            // Render Board Title
+            document.getElementById('board-title-text').innerHTML = !isBattle 
+                ? '<i class="fa-solid fa-radar mr-2"></i>我的星域艦隊分佈圖' 
+                : '<i class="fa-solid fa-crosshairs mr-2"></i>敵方雷達掃描對戰圖';
+
+            // Render Interactive Grid
+            const container = document.getElementById('student-grid-container');
+            const enemyData = isP1 ? gameState.p2 : gameState.p1;
+            
+            // In Deployment, show own ships. In Battle, show own attacks on enemy grid!
+            const displayShips = !isBattle ? myData.ships : []; // Hide enemy ships
+            const displayAttacks = !isBattle ? [] : myData.attacks;
+
+            renderCoordinateGrid(container, displayShips, displayAttacks, false);
+
+            // Render Logs
+            renderLogs(document.getElementById('battle-log-list'), gameState.logs || []);
+        }
+
+        function renderTeacherDashboard() {
+            // Teacher sees full vision of both P1 and P2
+            document.getElementById('teacher-p1-name').innerText = gameState.p1?.name || 'Player 1';
+            document.getElementById('teacher-p2-name').innerText = gameState.p2?.name || 'Player 2';
+
+            const p1Hits = (gameState.p2?.attacks || []).filter(a => a.hit).length;
+            const p2Hits = (gameState.p1?.attacks || []).filter(a => a.hit).length;
+
+            document.getElementById('teacher-p1-hp').innerText = `血量: ${10 - p1Hits}/10`;
+            document.getElementById('teacher-p2-hp').innerText = `血量: ${10 - p2Hits}/10`;
+
+            // Render both grids with revealed ships
+            renderCoordinateGrid(document.getElementById('teacher-grid-p1'), gameState.p1?.ships || [], gameState.p2?.attacks || [], true);
+            renderCoordinateGrid(document.getElementById('teacher-grid-p2'), gameState.p2?.ships || [], gameState.p1?.attacks || [], true);
+
+            renderLogs(document.getElementById('teacher-global-logs'), gameState.logs || []);
+        }
+
+        // Generic Canvas/Grid Renderer with Axis & Labels
+        function renderCoordinateGrid(container, ships, attacks, revealAll = false) {
+            container.innerHTML = '';
+
+            const range = currentQuadrantMode === 'Q1' ? { min: 0, max: 10 } : { min: -5, max: 5 };
+            const size = range.max - range.min + 1;
+
+            container.style.display = 'grid';
+            container.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+            container.style.gridTemplateRows = `repeat(${size}, 1fr)`;
+            container.style.gap = '2px';
+
+            // Loop Y from max down to min (Cartesian orientation)
+            for (let y = range.max; y >= range.min; y--) {
+                for (let x = range.min; x <= range.max; x++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'grid-cell relative rounded flex items-center justify-center text-[9px] font-mono select-none';
+
+                    // Background color styling
+                    const isXAxis = y === 0;
+                    const isYAxis = x === 0;
+
+                    if (isXAxis && isYAxis) {
+                        cell.classList.add('bg-slate-800', 'border', 'border-amber-500/50', 'text-amber-400'); // Origin
+                    } else if (isXAxis || isYAxis) {
+                        cell.classList.add('bg-slate-900', 'border', 'border-slate-700/80', 'text-slate-400');
+                    } else {
+                        cell.classList.add('bg-slate-950/80', 'border', 'border-slate-800/50', 'text-slate-600');
+                    }
+
+                    // Check if Ship exists here
+                    let shipCell = false;
+                    ships.forEach(s => {
+                        if (s.coords.some(c => c.x === x && c.y === y)) shipCell = true;
+                    });
+
+                    if (shipCell && (revealAll || !revealAll)) {
+                        cell.classList.remove('bg-slate-950/80');
+                        cell.classList.add('bg-cyan-900/60', 'border-cyan-500/60');
+                        cell.innerHTML = '<i class="fa-solid fa-shield-cat text-cyan-400 text-[10px]"></i>';
+                    }
+
+                    // Check Attacks
+                    const atk = attacks.find(a => a.x === x && a.y === y);
+                    if (atk) {
+                        cell.innerHTML = '';
+                        if (atk.hit) {
+                            cell.classList.add('bg-red-900/80', 'border-red-500');
+                            cell.innerHTML = '<i class="fa-solid fa-burst text-red-400 animate-pulse text-xs"></i>';
+                        } else {
+                            cell.classList.add('bg-slate-800');
+                            cell.innerHTML = '<i class="fa-solid fa-xmark text-slate-500 text-xs"></i>';
+                        }
+                    }
+
+                    // Tooltip label on hover
+                    cell.title = `Coordinates: (${x}, ${y})`;
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        function renderLogs(container, logs) {
+            container.innerHTML = '';
+            if (!logs || logs.length === 0) {
+                container.innerHTML = '<p class="text-slate-600">尚無對戰記錄</p>';
+                return;
+            }
+            logs.slice().reverse().forEach(log => {
+                const p = document.createElement('p');
+                p.className = 'text-slate-300 border-b border-slate-900/50 pb-1';
+                p.innerText = log;
+                container.appendChild(p);
+            });
+        }
+    </script>
+</body>
+</html>
